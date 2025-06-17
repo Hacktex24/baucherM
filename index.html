@@ -1,0 +1,139 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generador de Bauches de Pago - Herrería Macom</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <!-- Logo visible en la página -->
+  <img id="logo" src="logo.png" alt="Logo Herrería Macom">
+
+  <h1>Herrería Macom</h1>
+  <p class="address">Salvador Ortega 109B, Lindavista, 38010 Celaya, Gto.</p>
+
+  <form id="voucherForm">
+    <label>
+      Folio:
+      <input type="text" id="folio" placeholder="Folio de la transacción">
+    </label>
+    <label>
+      Nombre del cliente:
+      <input type="text" id="nombreCliente" placeholder="Nombre completo">
+    </label>
+    <label>
+      Dirección del cliente:
+      <input type="text" id="direccionCliente" placeholder="Dirección del cliente">
+    </label>
+    <label>
+      Fecha de entrega estimada:
+      <input type="date" id="fechaEntrega">
+    </label>
+    <label>
+      Comentarios del producto:
+      <textarea id="comentarios" rows="3" placeholder="Comentarios o detalles adicionales"></textarea>
+    </label>
+    <label>
+      Anticipo pagado (MXN):
+      <input type="number" id="anticipo" step="0.01" placeholder="0.00">
+    </label>
+    <label>
+      Pendiente (MXN):
+      <input type="number" id="pendiente" step="0.01" placeholder="0.00">
+    </label>
+    <button id="generateBtn" type="button">Generar PDF</button>
+  </form>
+
+  <div id="qrCode" style="display:none;"></div>
+
+  <script>
+    async function generatePDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+
+      // LOGO usando canvas para garantizar carga bajo file://
+      try {
+        const imgEl = document.getElementById('logo');
+        await new Promise(resolve => {
+          if (imgEl.complete) return resolve();
+          imgEl.onload = () => resolve();
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width  = imgEl.naturalWidth;
+        canvas.height = imgEl.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imgEl, 0, 0);
+        const logoDataURL = canvas.toDataURL('image/png');
+        doc.addImage(logoDataURL, 'PNG', 10, 10, 50, 25);
+      } catch (e) {
+        console.warn('No se pudo cargar el logo.');
+      }
+
+      // Encabezados de texto
+      doc.setFontSize(14);
+      doc.text('Herrería Macom', 60, 30);
+      doc.setFontSize(10);
+      doc.text('Salvador Ortega 109B, Lindavista, 38010 Celaya, Gto.', 60, 36);
+
+      // Datos del formulario
+      const folio = document.getElementById('folio').value || 'sin_folio';
+      const nombre = document.getElementById('nombreCliente').value;
+      const direc  = document.getElementById('direccionCliente').value;
+      const fecha  = document.getElementById('fechaEntrega').value;
+      const com    = document.getElementById('comentarios').value;
+      const antic  = parseFloat(document.getElementById('anticipo').value || 0).toFixed(2);
+      const pend   = parseFloat(document.getElementById('pendiente').value || 0).toFixed(2);
+
+      doc.setFontSize(12);
+      doc.text(`Folio: ${folio}`, pageW - 10, 30, null, null, 'right');
+
+      let y = 50;
+      doc.setFontSize(11);
+      doc.text(`Nombre del cliente: ${nombre}`, 10, y);    y += 8;
+      doc.text(`Dirección del cliente: ${direc}`, 10, y);   y += 8;
+      doc.text(`Fecha entrega estimada: ${fecha}`, 10, y);  y += 8;
+
+      doc.text('Comentarios del producto:', 10, y);
+      y += 6;
+      doc.setFontSize(10);
+      const lines = doc.splitTextToSize(com, pageW - 20);
+      doc.text(lines, 10, y);
+      y += lines.length * 6 + 4;
+
+      doc.setFontSize(11);
+      doc.text(`Anticipo pagado: $${antic}`, 10, y);        y += 8;
+      doc.text(`Pendiente:       $${pend}`, 10, y);
+
+      // Generar QR 10% más pequeño (90×90 mm)
+      const qrData = JSON.stringify({ folio, nombre, direccion: direc, fechaEntrega: fecha, comentarios: com, anticipo: antic, pendiente: pend });
+      const qrContainer = document.getElementById('qrCode');
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, {
+        text: qrData,
+        width: 90,
+        height: 90,
+        correctLevel: QRCode.CorrectLevel.H
+      });
+      const qrCanvas = qrContainer.querySelector('canvas');
+      const qrImg   = qrCanvas.toDataURL('image/png');
+      const qrSize  = 90;
+      const x       = (pageW - qrSize) / 2;
+      const yQR     = (pageH - qrSize) / 2;
+      doc.addImage(qrImg, 'PNG', x, yQR, qrSize, qrSize);
+
+      doc.save(`bauche_${folio}.pdf`);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('generateBtn').addEventListener('click', generatePDF);
+    });
+  </script>
+</body>
+</html>
